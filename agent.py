@@ -99,7 +99,7 @@ def parse_filters(state: State) -> State:
     
     filters = call_llm(prompt, state["query"], retries=1)
     filters_validated = OrderFilters.model_validate(filters)
-    print(filters_validated.model_dump())
+    #print(filters_validated.model_dump())
 
     return {"filters": filters_validated.model_dump()}
 
@@ -141,15 +141,46 @@ def parse_orders(state: State) -> State:
         try:
             order = call_llm(prompt, raw_order, retries=1)
             order_validated = Order.model_validate(order)
-            parsed_orders.append(order_validated)
+            parsed_orders.append(order_validated.model_dump())
         except (ValueError) as e:
             logging.exception(f"Failed to parse order. Error: {e}")
-    print(parsed_orders)
+    #print(parsed_orders)
 
     return {"parsed_orders": parsed_orders}
 
 def filter_orders(state: State) -> State:
-    return {}
+    logging.info("Filtering orders")
+
+    filters = state["filters"]
+    filtered_orders = []
+
+    order_id = filters.get("orderId")
+    buyer = filters.get("buyer")
+    state_filter = filters.get("state")
+    min_total = filters.get("min_total")
+    max_total = filters.get("max_total")
+
+    for order in state["parsed_orders"]:
+        if order_id and order.get("orderId") != order_id:
+            continue
+
+        if buyer and buyer.lower() not in order.get("buyer", "").lower():
+            continue
+
+        if state_filter and order.get("state") != state_filter:
+            continue
+
+        total = order.get("total", 0)
+
+        if min_total is not None and total <= min_total:
+            continue
+
+        if max_total is not None and total >= max_total:
+            continue
+
+        filtered_orders.append(order)
+
+    return {"output": {"orders": filtered_orders}}
 
 def build_graph():
     logging.info("Building graph")
@@ -171,7 +202,7 @@ def build_graph():
 
 def main():
     #query = input("Enter natural language request: ")
-    query = "Show me all orders where the buyer was located in Ohio and total value was over 500."
+    query = "Show me all orders where the buyer was located in Ohio and total value was over 600."
 
     if not query:
         raise ValueError("Query cannot be empty")
@@ -179,7 +210,7 @@ def main():
     app = build_graph()
     result = app.invoke({"query": query})
     
-    print(str(result["output"]))
+    print(json.dumps(result["output"]))
 
 if __name__ == "__main__":
     main()
