@@ -1,3 +1,4 @@
 flask
 langgraph
 openai
+scikit-learn

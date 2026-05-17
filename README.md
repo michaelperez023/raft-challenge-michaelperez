@@ -33,7 +33,7 @@ python agent.py
 
 # Architecture Diagram
 
-user query -> parse filters -> fetch orders -> parse orders -> filter orders -> returned orders
+user query -> parse filters -> fetch orders -> parse orders -> filter orders -> predict totals (optional linear regression) -> returned orders
 
 
 ____________________________
@@ -74,6 +74,12 @@ Example: { "orderId": "1001", "buyer": "John Davis", "state": "OH", "total": 742
 filter_orders:
 
 Applies the extracted filters to the parsed orders
+
+-> 
+
+predict_totals:\
+Fit a linear regression model over all orders, to predict an order's total from the number of items.\
+Uses SciKit-learn LinearRegression\
 
 ->
 

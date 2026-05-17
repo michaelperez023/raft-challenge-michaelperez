@@ -7,6 +7,8 @@ from openai import OpenAI
 import json
 import requests
 from pydantic import BaseModel
+from sklearn.linear_model import LinearRegression
+import numpy as np
 
 logging.basicConfig(level=logging.INFO)
 
@@ -37,6 +39,7 @@ class Order(BaseModel):
     buyer: str
     state: str
     total: float
+    items: List[str]
 
 def extract_json(text: str) -> dict:
     text = text.strip()
@@ -133,7 +136,8 @@ def parse_orders(state: State) -> State:
             "orderId": string,
             "buyer": string,
             "state": two-letter US state abbreviation,
-            "total": number
+            "total": number,
+            "items": list of strings
             }
     """
 
@@ -182,6 +186,51 @@ def filter_orders(state: State) -> State:
 
     return {"output": {"orders": filtered_orders}}
 
+def predict_totals(state: State) -> State:
+    logging.info("Running linear regression to predict order total from number of items")
+
+    parsed_orders = state["parsed_orders"]
+    output = state["output"]
+
+    if len(parsed_orders) < 2:
+        output["linear_regression"] = {
+            "message": "Not enough orders to fit linear regression model."
+        }
+        return {"output": output}
+
+    X = []
+    y = []
+
+    for order in parsed_orders:
+        num_items = len(order.get("items", []))
+        X.append([num_items])
+        y.append(order["total"])
+
+    X = np.array(X)
+    y = np.array(y)
+
+    model = LinearRegression()
+    model.fit(X, y)
+
+    orders_with_predictions = []
+    for order in output["orders"]:
+        num_items = len(order.get("items", []))
+        predicted_total = model.predict(np.array([[num_items]]))[0]
+
+        order_with_prediction = dict(order)
+        order_with_prediction["num_items"] = num_items
+        order_with_prediction["predicted_total"] = round(float(predicted_total), 2)
+        order_with_prediction["prediction_error"] = round(order["total"] - float(predicted_total), 2)
+
+        orders_with_predictions.append(order_with_prediction)
+
+    output["orders"] = orders_with_predictions
+    output["linear_regression_message"] = {
+        "message": f"Linear regression model was trained on {len(parsed_orders)} orders."
+    }
+
+    return {"output": output}
+
 def build_graph():
     logging.info("Building graph")
 
@@ -191,12 +240,18 @@ def build_graph():
     graph.add_node("fetch_orders", fetch_orders)
     graph.add_node("parse_orders", parse_orders)
     graph.add_node("filter_orders", filter_orders)
+    graph.add_node("predict_totals", predict_totals)
 
     graph.add_edge(START, "parse_filters")
     graph.add_edge("parse_filters", "fetch_orders")
     graph.add_edge("fetch_orders", "parse_orders")
     graph.add_edge("parse_orders", "filter_orders")
+    # exclude linear regression
     graph.add_edge("filter_orders", END)
+
+    # include linear regression
+    #graph.add_edge("filter_orders", "predict_totals")
+    #graph.add_edge("predict_totals", END)
 
     return graph.compile()
 
