@@ -75,4 +75,39 @@ filter_orders:
 
 Applies the extracted filters to the parsed orders
 
--> Final JSON Output
+->
+
+Final JSON Output
+{"orders":\
+[\
+    {"orderId": "1003", "buyer": "Mike Turner", "state": "OH", "total": 1299.99},\
+    {"orderId": "1005", "buyer": "Chris Myers", "state": "OH", "total": 512.0},\
+    {"orderId": "1001", "buyer": "John Davis", "state": "OH", "total": 742.1}\
+]}
+
+
+# Edge Cases and how they are handled
+context window overflow
+In the case of querying a very large database of 100s of orders, the LLM's context window does not overflow because each order is sent to the LLM individually, keeping each LLM call small.
+
+model hallucination
+1) prompting the model to only return valid JSON with exact keys.
+2) I validate model outputs with pydantic
+3) call_llm() has a retry path to ask for corrections if errors occur
+4) using temperature = 0 when calling the LLM to make output deterministic
+
+unpredictable API schema changes
+1) I validate the raw_orders field immediately after the API call for fetching orders. If the field is missing or the wrong type, an error is raised. 
+
+
+# Test Cases Passed
+
+Show me all orders where the buyer was located in Ohio and total value was over 500.
+Show orders from Washington.
+Show me all orders where the buyer was located in Texas.
+Show me orders for John Davis.
+Find order 1001.
+Show me all orders from Florida.
+Show me all orders over 2000 dollars.
+Show me all orders from Ohio under 600 dollars.
+Get orders from OH above 700.

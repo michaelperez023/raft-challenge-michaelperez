@@ -42,7 +42,7 @@ def extract_json(text: str) -> dict:
     text = text.strip()
 
     start = text.find("{")
-    end = text.find("}")
+    end = text.rfind("}")
 
     if start == -1 or end == -1:
         raise ValueError(f"No JSON found in response: {text}")
