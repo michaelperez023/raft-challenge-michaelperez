@@ -87,7 +87,7 @@ def parse_filters(state: State) -> State:
     prompt = """
             Extract order search filters from the user's request.
 
-            Return ONLY valid JSOn with exactly these keys:
+            Return ONLY valid JSON with exactly these keys:
             {
             "orderId": string or null,
             "buyer": string or null,
@@ -201,8 +201,7 @@ def build_graph():
     return graph.compile()
 
 def main():
-    #query = input("Enter natural language request: ")
-    query = "Show me all orders where the buyer was located in Ohio and total value was over 600."
+    query = input("Enter natural language request: ")
 
     if not query:
         raise ValueError("Query cannot be empty")
