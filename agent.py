@@ -247,11 +247,11 @@ def build_graph():
     graph.add_edge("fetch_orders", "parse_orders")
     graph.add_edge("parse_orders", "filter_orders")
     # exclude linear regression
-    graph.add_edge("filter_orders", END)
+    #graph.add_edge("filter_orders", END)
 
     # include linear regression
-    #graph.add_edge("filter_orders", "predict_totals")
-    #graph.add_edge("predict_totals", END)
+    graph.add_edge("filter_orders", "predict_totals")
+    graph.add_edge("predict_totals", END)
 
     return graph.compile()
 
