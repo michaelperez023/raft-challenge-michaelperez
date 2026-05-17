@@ -32,3 +32,5 @@ python agent.py
 
 
 # Architecture Diagram
+
+parse filters -> fetch orders -> parse orders -> filter orders
