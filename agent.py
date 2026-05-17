@@ -1,14 +1,16 @@
 from langgraph.graph import START, StateGraph, END
 from typing_extensions import TypedDict
-from typing import List
+from typing import List, Optional
 import logging
 import os
 from openai import OpenAI
 import json
+import requests
+from pydantic import BaseModel
 
 logging.basicConfig(level=logging.INFO)
 
-API_URL = "https://localhost:5001/api/orders"
+API_URL = "http://localhost:5001/api/orders"
 MODEL = "openai/gpt-oss-120b:free"
 
 client = OpenAI(
@@ -22,6 +24,19 @@ class State(TypedDict):
     parsed_orders: List[dict]
     filters: dict
     output: dict
+
+class OrderFilters(BaseModel):
+    orderId: Optional[str] = None
+    buyer: Optional[str] = None
+    state: Optional[str] = None
+    min_total: Optional[float] = None
+    max_total: Optional[float] = None
+
+class Order(BaseModel):
+    orderId: str
+    buyer: str
+    state: str
+    total: float
 
 def extract_json(text: str) -> dict:
     text = text.strip()
@@ -83,15 +98,55 @@ def parse_filters(state: State) -> State:
             """
     
     filters = call_llm(prompt, state["query"], retries=1)
+    filters_validated = OrderFilters.model_validate(filters)
+    print(filters_validated.model_dump())
 
-    breakpoint()
-    return {}
+    return {"filters": filters_validated.model_dump()}
 
 def fetch_orders(state: State) -> State:
-    return {}
+    logging.info("Fetching orders from API")
+
+    try:
+        response = requests.get(API_URL, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+    except Exception as e:
+        logging.exception("Failed to fetch orders")
+        raise RuntimeError(f"API request failed: {e}")
+    
+    raw_orders = data.get("raw_orders")
+    if raw_orders is None or not isinstance(raw_orders, list):
+        raise ValueError("Expected the API response to include a list of raw orders.")
+    
+    return {"raw_orders": raw_orders}
 
 def parse_orders(state: State) -> State:
-    return {}
+    logging.info("Parsing raw orders into structured JSON")
+
+    parsed_orders = []
+
+    prompt = """
+            You extract structured order data from messy customer order text.
+
+            Return ONLY valid JSON with exactly these keys:
+            {
+            "orderId": string,
+            "buyer": string,
+            "state": two-letter US state abbreviation,
+            "total": number
+            }
+    """
+
+    for raw_order in state["raw_orders"]:
+        try:
+            order = call_llm(prompt, raw_order, retries=1)
+            order_validated = Order.model_validate(order)
+            parsed_orders.append(order_validated)
+        except (ValueError) as e:
+            logging.exception(f"Failed to parse order. Error: {e}")
+    print(parsed_orders)
+
+    return {"parsed_orders": parsed_orders}
 
 def filter_orders(state: State) -> State:
     return {}
