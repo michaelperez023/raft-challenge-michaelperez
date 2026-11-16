@@ -4,7 +4,7 @@
 
 Ask for customer orders in plain English, such as "Show me all orders where the buyer was located in Ohio and total value was over 500", and get the matching orders back as JSON. A LangGraph graph has a model (OpenAI's gpt-oss-120b, through OpenRouter) turn the request into search filters, and turn each order from an API that returns messy text into a structured record. Every reply is validated with Pydantic, each parsed order is checked against the text it came from, and the filtering itself is plain Python.
 
-This is my solution to the take-home challenge from Raft's AI Engineer hiring process, completed in May 2026. Raft provided the brief, [Instructions.md](Instructions.md), and the dummy orders API, [dummy_customer_api.py](dummy_customer_api.py); both are unchanged here. The version I submitted is tagged [`submission-2026-05-17`](https://github.com/michaelperez023/raft-challenge-michaelperez/tree/submission-2026-05-17). This version fixes the bugs listed under [Changes since the submission](#changes-since-the-submission) and adds an offline mode, tests and CI.
+This is my solution to the take-home challenge from Raft's AI Engineer hiring process, completed in May 2026. Raft provided the brief, [Instructions.md](Instructions.md), and the dummy orders API, [dummy_customer_api.py](dummy_customer_api.py); both are unchanged here. The version I submitted is tagged [`submission-2026-05-17`](https://github.com/michaelperez023/raft-challenge-michaelperez/tree/submission-2026-05-17). This version, updated in November 2026, adds an offline mode, tests and CI.
 
 ## Example
 
@@ -187,22 +187,6 @@ CI runs the linter, the tests and the offline example on Python 3.12. No test us
 - Only the orders are checked against their text. The filters are validated but not checked against the request, which can give a value in other words ("over two thousand"), so a filter value the model invents is not caught.
 - A request makes one model call plus one per order, one after another. That is quick for the dummy API's five orders and slow for hundreds.
 - The tests replace the model with the fake or with scripted replies, so they check everything around the model, not the model's answers.
-
-## Changes since the submission
-
-Compared with the [submitted version](https://github.com/michaelperez023/raft-challenge-michaelperez/tree/submission-2026-05-17):
-
-- **Model.** It was hard-coded to `openai/gpt-oss-120b:free`, for which OpenRouter lists no providers as of November 2026, so the submitted code cannot run as it is. The default is now `openai/gpt-oss-120b:exacto`, which the brief requires, and `OPENROUTER_MODEL` overrides it.
-- **Setup.** The OpenAI client was created on import, so running without `OPENROUTER_API_KEY` ended in a `KeyError` traceback, and the README did not mention the key. Its commands were not in code blocks and used `cd raft_challenge`, which is not the clone's directory, and the brief's "one command" took two terminals and an interactive prompt. Now the client is created only when a run needs it, a missing key gets a clear message, and `python main.py "..."` takes the request as an argument and serves the dummy API itself, on 127.0.0.1 and without Flask's debugger.
-- **Retries.** Only replies without valid JSON were retried, and the correction message did not include the reply it asked to correct. A reply that failed Pydantic validation was not retried: for the filters it stopped the run (a numeric `orderId` was enough), and for an order it dropped the order. Validation now happens inside the retry, which sends back the reply and the error. The JSON is now the first complete object in the reply, instead of everything from the first `{` to the last `}`.
-- **Silent gaps.** A dropped order left no sign in the output, and a model API error on any one order, after the SDK's own retries, stopped the whole run. Skipped orders now end the run with a warning and exit status 3, and only errors that would affect every call stop the run.
-- **Determinism.** The dummy API shuffles its orders and the results were not sorted, so the same request could list them in a different order on each run. They are now sorted by `orderId`.
-- **Output.** The regression was switched on and off by commenting graph edges in or out. It was on in the submission, so every order had fields that the README's sample output did not show, and the summary's key was `linear_regression` or `linear_regression_message` depending on the number of orders. The default output now matches the brief's format exactly; `--predict` adds the regression, with one key.
-- **Filters.** Bounds were always strict, so "at least 512" left out the $512.00 order; a lower-case state or an order ID such as `"#1001"` from the model matched nothing; and a buyer filter matched any part of a name ("Kim" matched "Kimberly"). Bounds can now be inclusive, states and order IDs are normalized, and buyer filters match whole words.
-- **Hallucination.** Validation checked only types, so an invented buyer or total passed. Every value must now appear in the order's text, and the request asks for structured output.
-- **API responses.** Only the presence of the `raw_orders` list was checked, so a list of JSON objects went into the model messages as objects. Records are now checked one by one.
-- **Size limits.** Requests over 1,000 characters are refused and orders over 2,000 characters are skipped, so one oversized record cannot fill the context window.
-- **Project.** Dependencies are pinned, including `pydantic`, `requests` and `numpy`, which were imported but not listed. `--offline` runs the whole graph without a key. The nine "Test Cases Passed", which had been checked by hand, are now tests, with the others above, and CI runs them.
 
 ## Repository layout
 
